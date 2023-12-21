@@ -14,6 +14,7 @@
 #include <linux/utsname.h>
 #include <linux/mm.h>
 #include <linux/timekeeping.h>
+#include <linux/sched/signal.h>
 
 #include <asm/errno.h>
 
@@ -279,7 +280,16 @@ static void mem(char* buf) {
 }
 
 static void num_procs(char* buf) {
-    sprintf(buf, "Procs:    %d\n", -1);
+    int count = 0;
+    struct task_struct* p;
+
+    rcu_read_lock();
+    for_each_process(p) {
+        count++;
+    }
+    rcu_read_unlock();
+
+    sprintf(buf, "Procs:    %d\n", count);
 }
 
 static void uptime(char* buf) {
