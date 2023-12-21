@@ -11,14 +11,11 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
+#include <linux/utsname.h>
+#include <linux/timekeeping.h>
 
 #include <asm/errno.h>
 
-static int kfetch_open(struct inode *, struct file *);
-static int kfetch_release(struct inode *, struct file *);
-static ssize_t kfetch_read(struct file *, char __user *, size_t, loff_t *);
-static ssize_t kfetch_write(struct file *, const char __user *, size_t, loff_t *);
- 
 #define SUCCESS 0
 #define DEVICE_NAME "kfetch"
 #define BUF_LEN 1024
@@ -33,6 +30,19 @@ static ssize_t kfetch_write(struct file *, const char __user *, size_t, loff_t *
 #define KFETCH_NUM_PROCS (1 << 5)
 
 #define KFETCH_FULL_INFO ((1 << KFETCH_NUM_INFO) - 1);
+
+static int kfetch_open(struct inode *, struct file *);
+static int kfetch_release(struct inode *, struct file *);
+static ssize_t kfetch_read(struct file *, char __user *, size_t, loff_t *);
+static ssize_t kfetch_write(struct file *, const char __user *, size_t, loff_t *);
+
+static void kfetch_msg(char*);
+static void kernel_release(char*);
+static void cpu_model(char*);
+static void num_cpus(char*);
+static void mem(char*);
+static void num_procs(char*);
+static void uptime(char*);
 
 static int major;
 enum {
@@ -102,7 +112,7 @@ static int kfetch_release(struct inode *inode, struct file *file)
 }
 
 static int mask_info;
- 
+
 static ssize_t kfetch_read(struct file *filp,
                            char __user *buffer,
                            size_t length,
@@ -111,10 +121,8 @@ static ssize_t kfetch_read(struct file *filp,
     size_t bytes_read;
 
     memset(kfetch_buf, 0, BUF_LEN + 1);
-    sprintf(kfetch_buf, "gotcha: %d\n", mask_info);
-    pr_info("kfetch_buf: %s\n", kfetch_buf);
-
-    bytes_read = (length < bytes_read) ? length : strlen(kfetch_buf) - *offset;
+    kfetch_msg(kfetch_buf);
+    bytes_read = min(strlen(kfetch_buf) - (size_t)(*offset), sizeof(kfetch_buf));
 
     if (bytes_read == 0) {
         return 0;
@@ -145,6 +153,87 @@ static ssize_t kfetch_write(struct file *filp,
     }
 
     return SUCCESS;
+}
+
+static void kfetch_msg(char* buf)
+{
+/*
+format: (ascii art should be included in the output) (the info below separator are optional)
+                    <hostname>
+        .-.         ---separator with same length as hostname---
+       (-- |        Kernel:   <kernel release>
+        U  |        CPU:      <cpu model>
+      / --- \       CPUs:     <online CPUs>/<total CPUs>
+     ( |   | |      Mem:      <used memory>/<total memory>
+   |\\_)___/\)/\    Procs:    <total processes>
+  <__)------(__/    Uptime:   <uptime>ms
+*/
+    char* hostname = "sh.haha.com";
+
+    strcat(buf, "                    ");
+    strcat(buf, hostname);
+    strcat(buf, "\n");
+    strcat(buf, "        .-.         ");
+    for (int i = 0; i < strlen(hostname); i++) {
+        strcat(buf, "-");
+    }
+    strcat(buf, "\n");
+    strcat(buf, "       (-- |        ");
+    kernel_release(buf);
+    strcat(buf, "\n");
+    strcat(buf, "        U  |        ");
+    cpu_model(buf);
+    strcat(buf, "\n");
+    strcat(buf, "      / --- \\       ");
+    num_cpus(buf);
+    strcat(buf, "\n");
+    strcat(buf, "     ( |   | |      ");
+    mem(buf);
+    strcat(buf, "\n");
+    strcat(buf, "   |\\_)___/\\)/\\     ");
+    num_procs(buf);
+    strcat(buf, "\n");
+    strcat(buf, "  <__)------(__/    ");
+    uptime(buf);
+    strcat(buf, "\n");
+}
+
+static void kernel_release(char* buf)
+{
+    char release_str[100];
+    sprintf(release_str, "Kernel:   %s", utsname()->release);
+    strcat(buf, release_str);
+}
+
+static void cpu_model(char* buf) {
+    char* cpu_model = "CPU:      Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz";
+    strcat(buf, cpu_model);
+}
+
+static void num_cpus(char* buf)
+{
+    char* cpus = "cpus";
+    strcat(buf, cpus);
+}
+
+static void mem(char* buf)
+{
+    char* mem = "mem";
+    strcat(buf, mem);
+}
+
+static void num_procs(char* buf)
+{
+    char* procs = "procs";
+    strcat(buf, procs);
+}
+
+static void uptime(char* buf) {
+    struct timespec64 uptime;
+    long uptime_min;
+    ktime_get_boottime_ts64(&uptime);
+    uptime_min = div_u64(uptime.tv_sec, 60);
+    sprintf(buf + strlen(buf), "Uptime:   %ld mins\n", uptime_min);
 }
 
 module_init(kfetch_init);
