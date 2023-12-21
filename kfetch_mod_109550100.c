@@ -39,6 +39,7 @@ static ssize_t kfetch_write(struct file *, const char __user *, size_t, loff_t *
 
 static void kfetch_msg(char*);
 static void next_victim(char*);
+static void host_name(char*);
 static void kernel_release(char*);
 static void cpu_model(char*);
 static void num_cpus(char*);
@@ -171,12 +172,12 @@ static ssize_t kfetch_write(struct file *filp,
         kernel_release(info[0].str);
         info[0].present = true;
     }
-    if (mask_info & KFETCH_NUM_CPUS) {
-        num_cpus(info[1].str);
+    if (mask_info & KFETCH_CPU_MODEL) {
+        cpu_model(info[1].str);
         info[1].present = true;
     }
-    if (mask_info & KFETCH_CPU_MODEL) {
-        cpu_model(info[2].str);
+    if (mask_info & KFETCH_NUM_CPUS) {
+        num_cpus(info[2].str);
         info[2].present = true;
     }
     if (mask_info & KFETCH_MEM) {
@@ -208,9 +209,10 @@ format: (ascii art should be included in the output) (the info below separator a
    |\\_)___/\)/\    Procs:    <total processes>
   <__)------(__/    Uptime:   <uptime> ms
 */
-    char* hostname = "sh.haha.com";
+    char hostname[200];
 
     strcat(buf, "                    ");
+    host_name(hostname);
     strcat(buf, hostname);
     strcat(buf, "\n");
     strcat(buf, "        .-.         ");
@@ -250,6 +252,11 @@ static void next_victim(char* buf)
     }
 }
 
+static void host_name(char* buf)
+{
+    strcpy(buf, utsname()->nodename);
+}
+
 static void kernel_release(char* buf)
 {
     sprintf(buf, "Kernel:   %s", utsname()->release);
@@ -271,10 +278,8 @@ static void mem(char* buf) {
     sprintf(buf, "Mem:      %lu MB / %lu MB", i.freeram * uint_mb >> 10, i.totalram * uint_mb >> 10);
 }
 
-static void num_procs(char* buf)
-{
-    // sprintf(buf, "Procs:    %u", get_nr_threads());
-    sprintf(buf, "Procs:    temp");
+static void num_procs(char* buf) {
+    sprintf(buf, "Procs:    %d\n", -1);
 }
 
 static void uptime(char* buf) {
