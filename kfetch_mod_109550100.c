@@ -12,6 +12,7 @@
 #include <linux/uaccess.h>
 #include <linux/version.h>
 #include <linux/utsname.h>
+#include <linux/mm.h>
 #include <linux/timekeeping.h>
 
 #include <asm/errno.h>
@@ -37,12 +38,18 @@ static ssize_t kfetch_read(struct file *, char __user *, size_t, loff_t *);
 static ssize_t kfetch_write(struct file *, const char __user *, size_t, loff_t *);
 
 static void kfetch_msg(char*);
+static void next_victim(char*);
 static void kernel_release(char*);
 static void cpu_model(char*);
 static void num_cpus(char*);
 static void mem(char*);
 static void num_procs(char*);
 static void uptime(char*);
+
+typedef struct {
+    char str[200];
+    bool present;
+} info_struct;
 
 static int major;
 enum {
@@ -55,6 +62,8 @@ static atomic_t already_open = ATOMIC_INIT(CDEV_NOT_USED);
 static char kfetch_buf[BUF_LEN + 1];
 
 static struct class *cls;
+
+static info_struct info[6];
 
 const static struct file_operations kfetch_ops = {
     .owner   = THIS_MODULE,
@@ -108,6 +117,11 @@ static int kfetch_release(struct inode *inode, struct file *file)
 
     module_put(THIS_MODULE); 
 
+    for (int i = 0; i < KFETCH_NUM_INFO; i++) {
+        memset(info[i].str, 0, sizeof(info[i].str));
+        info[i].present = false;
+    }
+
     return SUCCESS; 
 }
 
@@ -152,6 +166,32 @@ static ssize_t kfetch_write(struct file *filp,
         return -EFAULT;
     }
 
+    // if the corresponding bit is set, then set the info
+    if (mask_info & KFETCH_RELEASE) {
+        kernel_release(info[0].str);
+        info[0].present = true;
+    }
+    if (mask_info & KFETCH_NUM_CPUS) {
+        num_cpus(info[1].str);
+        info[1].present = true;
+    }
+    if (mask_info & KFETCH_CPU_MODEL) {
+        cpu_model(info[2].str);
+        info[2].present = true;
+    }
+    if (mask_info & KFETCH_MEM) {
+        mem(info[3].str);
+        info[3].present = true;
+    }
+    if (mask_info & KFETCH_UPTIME) {
+        uptime(info[4].str);
+        info[4].present = true;
+    }
+    if (mask_info & KFETCH_NUM_PROCS) {
+        num_procs(info[5].str);
+        info[5].present = true;
+    }
+
     return SUCCESS;
 }
 
@@ -166,7 +206,7 @@ format: (ascii art should be included in the output) (the info below separator a
       / --- \       CPUs:     <online CPUs>/<total CPUs>
      ( |   | |      Mem:      <used memory>/<total memory>
    |\\_)___/\)/\    Procs:    <total processes>
-  <__)------(__/    Uptime:   <uptime>ms
+  <__)------(__/    Uptime:   <uptime> ms
 */
     char* hostname = "sh.haha.com";
 
@@ -179,53 +219,60 @@ format: (ascii art should be included in the output) (the info below separator a
     }
     strcat(buf, "\n");
     strcat(buf, "       (-- |        ");
-    kernel_release(buf);
+    next_victim(buf);
     strcat(buf, "\n");
     strcat(buf, "        U  |        ");
-    cpu_model(buf);
+    next_victim(buf);
     strcat(buf, "\n");
     strcat(buf, "      / --- \\       ");
-    num_cpus(buf);
+    next_victim(buf);
     strcat(buf, "\n");
     strcat(buf, "     ( |   | |      ");
-    mem(buf);
+    next_victim(buf);
     strcat(buf, "\n");
     strcat(buf, "   |\\_)___/\\)/\\     ");
-    num_procs(buf);
+    next_victim(buf);
     strcat(buf, "\n");
     strcat(buf, "  <__)------(__/    ");
-    uptime(buf);
+    next_victim(buf);
     strcat(buf, "\n");
+}
+
+static void next_victim(char* buf)
+{
+    // go through the info array and find the first present info
+    for (int i = 0; i < KFETCH_NUM_INFO; i++) {
+        if (info[i].present) {
+            strcat(buf, info[i].str);
+            info[i].present = false;
+            return;
+        }
+    }
 }
 
 static void kernel_release(char* buf)
 {
-    char release_str[100];
-    sprintf(release_str, "Kernel:   %s", utsname()->release);
-    strcat(buf, release_str);
+    sprintf(buf, "Kernel:   %s", utsname()->release);
 }
 
 static void cpu_model(char* buf) {
-    char* cpu_model = "CPU:      Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz";
-    strcat(buf, cpu_model);
+    sprintf(buf, "CPU:      Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz");
 }
 
-static void num_cpus(char* buf)
-{
-    char* cpus = "cpus";
-    strcat(buf, cpus);
+static void num_cpus(char* buf) {
+    sprintf(buf, "CPUs:     %u / %u", num_online_cpus(), num_possible_cpus());
 }
 
-static void mem(char* buf)
-{
-    char* mem = "mem";
-    strcat(buf, mem);
+static void mem(char* buf) {
+    struct sysinfo i;
+    si_meminfo(&i);
+    sprintf(buf, "Mem:      %lu / %lu MB", i.freeram >> 10, i.totalram >> 10);
 }
 
 static void num_procs(char* buf)
 {
-    char* procs = "procs";
-    strcat(buf, procs);
+    // sprintf(buf, "Procs:    %u", get_nr_threads());
+    sprintf(buf, "Procs:    temp");
 }
 
 static void uptime(char* buf) {
@@ -233,7 +280,7 @@ static void uptime(char* buf) {
     long uptime_min;
     ktime_get_boottime_ts64(&uptime);
     uptime_min = div_u64(uptime.tv_sec, 60);
-    sprintf(buf + strlen(buf), "Uptime:   %ld mins\n", uptime_min);
+    sprintf(buf, "Uptime:   %ld mins", uptime_min);
 }
 
 module_init(kfetch_init);

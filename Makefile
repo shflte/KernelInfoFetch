@@ -20,8 +20,7 @@ test:
 	make all
 	make load
 	gcc -o kfetch kfetch.c
-	sudo ./kfetch -a
-	# rm kfetch
+	sudo ./kfetch -c -m -p
 
 print:
 	sudo dmesg | tail -n 10
