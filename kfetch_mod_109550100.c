@@ -265,8 +265,10 @@ static void num_cpus(char* buf) {
 
 static void mem(char* buf) {
     struct sysinfo i;
+    uint32_t uint_mb;
     si_meminfo(&i);
-    sprintf(buf, "Mem:      %lu / %lu MB", i.freeram >> 10, i.totalram >> 10);
+    uint_mb = i.mem_unit >> 10;
+    sprintf(buf, "Mem:      %lu MB / %lu MB", i.freeram * uint_mb >> 10, i.totalram * uint_mb >> 10);
 }
 
 static void num_procs(char* buf)
