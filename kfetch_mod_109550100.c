@@ -7,6 +7,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/printk.h>
+#include <linux/string.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
@@ -20,7 +21,7 @@ static ssize_t kfetch_write(struct file *, const char __user *, size_t, loff_t *
  
 #define SUCCESS 0
 #define DEVICE_NAME "kfetch"
-#define BUF_LEN 4000
+#define BUF_LEN 1024
 
 #define KFETCH_NUM_INFO 6
 
@@ -107,13 +108,25 @@ static ssize_t kfetch_read(struct file *filp,
                            size_t length,
                            loff_t *offset)
 {
-    int len;
-    if (copy_to_user(buffer, kfetch_buf, len)) {
-        pr_alert("Failed to copy data to user");
+    size_t bytes_read;
+
+    memset(kfetch_buf, 0, BUF_LEN + 1);
+    sprintf(kfetch_buf, "gotcha: %d\n", mask_info);
+    pr_info("kfetch_buf: %s\n", kfetch_buf);
+
+    bytes_read = (length < bytes_read) ? length : strlen(kfetch_buf) - *offset;
+
+    if (bytes_read == 0) {
         return 0;
     }
 
-    return 0; // return the number of bytes read
+    if (copy_to_user(buffer, kfetch_buf + *offset, bytes_read)) {
+        pr_alert("Failed to copy data to user");
+        return -EFAULT;
+    }
+
+    *offset += bytes_read;
+    return bytes_read;
 }
 
 static ssize_t kfetch_write(struct file *filp,
