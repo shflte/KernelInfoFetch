@@ -15,12 +15,8 @@ unload:
 	sudo rmmod kfetch_mod_109550100.ko
 
 test:
-	make unload
-	make clean
-	make all
-	make load
 	gcc -o kfetch kfetch.c
-	sudo ./kfetch -c -m -p
+	sudo ./kfetch -a
 
 print:
 	sudo dmesg | tail -n 10

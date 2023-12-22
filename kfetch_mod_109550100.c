@@ -17,6 +17,7 @@
 #include <linux/sched/signal.h>
 
 #include <asm/errno.h>
+#include <asm/processor.h>
 
 #define SUCCESS 0
 #define DEVICE_NAME "kfetch"
@@ -199,17 +200,6 @@ static ssize_t kfetch_write(struct file *filp,
 
 static void kfetch_msg(char* buf)
 {
-/*
-format: (ascii art should be included in the output) (the info below separator are optional)
-                    <hostname>
-        .-.         ---separator with same length as hostname---
-       (-- |        Kernel:   <kernel release>
-        U  |        CPU:      <cpu model>
-      / --- \       CPUs:     <online CPUs>/<total CPUs>
-     ( |   | |      Mem:      <used memory>/<total memory>
-   |\\_)___/\)/\    Procs:    <total processes>
-  <__)------(__/    Uptime:   <uptime> ms
-*/
     char hostname[200];
 
     strcat(buf, "                    ");
@@ -264,7 +254,8 @@ static void kernel_release(char* buf)
 }
 
 static void cpu_model(char* buf) {
-    sprintf(buf, "CPU:      Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz");
+    struct cpuinfo_x86* c = &cpu_data(0);
+    sprintf(buf, "CPU:      %s", c->x86_model_id);
 }
 
 static void num_cpus(char* buf) {
@@ -289,7 +280,7 @@ static void num_procs(char* buf) {
     }
     rcu_read_unlock();
 
-    sprintf(buf, "Procs:    %d\n", count);
+    sprintf(buf, "Procs:    %d", count);
 }
 
 static void uptime(char* buf) {
