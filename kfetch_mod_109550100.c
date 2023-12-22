@@ -52,6 +52,7 @@ static void uptime(char*);
 typedef struct {
     char str[200];
     bool present;
+    bool used;
 } info_struct;
 
 static int major;
@@ -121,8 +122,7 @@ static int kfetch_release(struct inode *inode, struct file *file)
     module_put(THIS_MODULE); 
 
     for (int i = 0; i < KFETCH_NUM_INFO; i++) {
-        memset(info[i].str, 0, sizeof(info[i].str));
-        info[i].present = false;
+        info[i].used = false;
     }
 
     return SUCCESS; 
@@ -167,6 +167,16 @@ static ssize_t kfetch_write(struct file *filp,
     if (copy_from_user(&mask_info, buffer, length)) {
         pr_alert("Failed to copy data from user");
         return -EFAULT;
+    }
+
+    if (mask_info == 0) {
+        return SUCCESS;
+    }
+
+    for (int i = 0; i < KFETCH_NUM_INFO; i++) {
+        memset(info[i].str, 0, sizeof(info[i].str));
+        info[i].present = false;
+        info[i].used = false;
     }
 
     // if the corresponding bit is set, then set the info
@@ -235,9 +245,9 @@ static void next_victim(char* buf)
 {
     // go through the info array and find the first present info
     for (int i = 0; i < KFETCH_NUM_INFO; i++) {
-        if (info[i].present) {
+        if (info[i].present && !info[i].used) {
             strcat(buf, info[i].str);
-            info[i].present = false;
+            info[i].used = true;
             return;
         }
     }
