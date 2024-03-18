@@ -96,7 +96,7 @@ static int __init kfetch_init(void)
 
     return SUCCESS;
 }
- 
+
 static void __exit kfetch_exit(void)
 {
     device_destroy(cls, MKDEV(major, 0));

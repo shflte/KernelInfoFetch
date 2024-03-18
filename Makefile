@@ -1,4 +1,4 @@
-obj-m += kfetch_mod_109550100.o
+obj-m += kfetch_mod.o
 
 PWD := $(CURDIR) 
 
@@ -9,10 +9,10 @@ clean:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 
 load:
-	sudo insmod kfetch_mod_109550100.ko
+	sudo insmod kfetch_mod.ko
 
 unload:
-	sudo rmmod kfetch_mod_109550100.ko
+	sudo rmmod kfetch_mod.ko
 
 test:
 	gcc -o kfetch kfetch.c
